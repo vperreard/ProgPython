@@ -1,0 +1,62 @@
+cat > .gitignore << EOF
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+
+# Fichiers sensibles
+config/credentials.json
+data/payments/liste_ibans.csv
+
+# Journaux et données générées
+logs/*
+*.log
+
+# Environnements virtuels
+venv/
+env/
+EOF
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Local configuration
+config.json
+file_paths.json
+
+# Sensitive data
+*.key
+*.pem
+*.env
+credentials.json
+
+# Temporary files
+*.tmp
+*.bak
+.DS_Store
+
+# Generated files
+*.pdf
+*.docx
+*.xlsx
+*.csv
+!requirements.txt
+
+# Backup files
+backups/
+*_backup*
+
+# Test files
+test_*
+*_test.py
+
+# Documentation
+docs/_build/
