@@ -27,10 +27,32 @@ from modules.invoices.factures_db_utils import (
 # Classe principale pour l'analyse des factures
 class AnalyseFactures:
     def __init__(self, dossier_factures=None):
-        # Charger les credentials depuis le fichier JSON
+        # Obtenir le chemin du projet et du dossier config
         self.SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(self.SCRIPT_DIR, 'credentials.json'), 'r') as file:
-            self.credentials = json.load(file)
+        PROJECT_ROOT = os.path.abspath(os.path.join(self.SCRIPT_DIR, '..', '..'))
+        CONFIG_DIR = os.path.join(PROJECT_ROOT, 'config')
+
+        # Essayer de charger credentials.json depuis config ou localement
+        credentials_paths = [
+            os.path.join(CONFIG_DIR, 'credentials.json'),  # D'abord dans config
+            os.path.join(self.SCRIPT_DIR, 'credentials.json')  # Puis localement
+        ]
+
+        self.credentials = None
+        for path in credentials_paths:
+            try:
+                with open(path, 'r') as file:
+                    self.credentials = json.load(file)
+                    print(f"✅ Credentials chargés depuis {path}")
+                    break
+            except FileNotFoundError:
+                continue
+
+        # Si aucun fichier credentials n'a été trouvé
+        if self.credentials is None:
+            print("⚠️ Aucun fichier credentials.json trouvé, utilisation de valeurs par défaut")
+            self.credentials = {"api_key": "dummy_key", "company_iban": "FR76XXXXXXXXXXXXXXXXXXXXXXXXX"}
+
             
         # Configuration de l'API OpenAI
         openai.api_key = self.credentials['api_key']
@@ -144,7 +166,12 @@ class AnalyseFactures:
         for col in required_columns:
             if col not in df.columns:
                 print(f"⚠️ Colonne manquante détectée : {col}, création d'une colonne vide.")
-                df[col] = None
+                df[col] = "N/A"
+        # Initialiser des colonnes supplémentaires pour éviter les erreurs
+        if "annee" not in df.columns:
+            df["annee"] = "N/A"
+        if "mois" not in df.columns:
+            df["mois"] = "N/A"
 
         # Afficher les colonnes après correction
         print(f"✅ Colonnes après correction : {df.columns.tolist()}")
@@ -525,12 +552,44 @@ class AnalyseFactures:
 
         # Extraire l'année et le mois des dates
         if "annee" not in self.df_factures.columns or "mois" not in self.df_factures.columns:
-            self.df_factures["annee"] = self.df_factures["date_facture"].apply(
-                lambda x: x.split("-")[2] if isinstance(x, str) and len(x.split("-")) == 3 else "N/A"
-            )
-            self.df_factures["mois"] = self.df_factures["date_facture"].apply(
-                lambda x: x.split("-")[1] if isinstance(x, str) and len(x.split("-")) == 3 else "N/A"
-            )
+            def extract_year_month(date_str):
+                if not isinstance(date_str, str):
+                    return "N/A", "N/A"
+                
+                # Essayer le format DD-MM-YYYY
+                parts = date_str.split("-")
+                if len(parts) == 3:
+                    try:
+                        # Vérifier si le format est JJ-MM-AAAA
+                        if len(parts[2]) == 4:  # AAAA est le dernier élément
+                            return parts[2], parts[1]  # année, mois
+                        elif len(parts[0]) == 4:  # AAAA est le premier élément
+                            return parts[0], parts[1]  # année, mois
+                    except:
+                        pass
+                
+                # Essayer le format DD/MM/YYYY
+                parts = date_str.split("/")
+                if len(parts) == 3:
+                    try:
+                        # Vérifier si le format est JJ/MM/AAAA
+                        if len(parts[2]) == 4:  # AAAA est le dernier élément
+                            return parts[2], parts[1]  # année, mois
+                        elif len(parts[0]) == 4:  # AAAA est le premier élément
+                            return parts[0], parts[1]  # année, mois
+                    except:
+                        pass
+                
+                return "N/A", "N/A"
+            
+            # Appliquer la fonction sur la colonne date_facture
+            years_months = self.df_factures["date_facture"].apply(extract_year_month)
+            
+            # Créer les colonnes année et mois
+            self.df_factures["annee"] = years_months.apply(lambda x: x[0])
+            self.df_factures["mois"] = years_months.apply(lambda x: x[1])
+            
+            print("✅ Colonnes année et mois ajoutées avec succès")
 
         if "paiement" not in self.df_factures.columns:
             self.df_factures["paiement"] = "❌"
@@ -549,6 +608,13 @@ class AnalyseFactures:
     def get_factures_filtrees(self, annee=None, mois=None, fournisseur=None, statut_paiement=None, montant_min=None):
         """Filtre les factures selon les critères spécifiés."""
         df_filtree = self.df_factures.copy()
+        
+        # Vérifier que les colonnes nécessaires existent
+        required_cols = ["annee", "mois", "fournisseur", "paiement"]
+        for col in required_cols:
+            if col not in df_filtree.columns:
+                print(f"⚠️ Colonne manquante pour le filtrage : {col}")
+                df_filtree[col] = "N/A"  # Ajouter une colonne par défaut
         
         # Filtre par année
         if annee and annee != "---":

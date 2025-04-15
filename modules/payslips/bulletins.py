@@ -14,8 +14,23 @@ from modules.payments.generer_virement import generer_xml_virements  # Import de
 
 
 # 🔹 Configuration des fichiers et cache
+# Trouver les chemins pour file_paths.json
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FILE = os.path.join(SCRIPT_DIR, "file_paths.json")
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..'))
+CONFIG_DIR = os.path.join(PROJECT_ROOT, 'config')
+
+# Essayer d'abord config, puis le dossier local
+potential_paths = [
+    os.path.join(CONFIG_DIR, "file_paths.json"),  # Dans config
+    os.path.join(SCRIPT_DIR, "file_paths.json")   # Dans le dossier bulletins
+]
+
+# Utiliser le premier fichier existant
+SETTINGS_FILE = next((path for path in potential_paths if os.path.exists(path)), 
+                    potential_paths[1])  # Par défaut, utiliser le chemin local
+
+print(f"📂 File paths utilisé : {SETTINGS_FILE}")
+
 CACHE_FILE = os.path.expanduser("~/Documents/Contrats/bulletins_cache.json")
 
 # 🔹 Dictionnaire des mois
