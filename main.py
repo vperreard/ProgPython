@@ -1203,779 +1203,795 @@ class MainApplication(tk.Tk):
             show_error("Erreur", f"Impossible d'ouvrir l'interface de gestion des MAR titulaires: {str(e)}")
             self.status_bar.set_message("Erreur lors de l'ouverture de l'interface de gestion des MAR titulaires.")
 
+    def manage_mar_remplacants():
+        """Gérer les MARS remplaçants dans le fichier Excel."""
+        try:
+            mar_data = pd.read_excel(file_paths["excel_mar"], sheet_name="MARS Remplaçants", dtype={"URSSAF": str, "secu": str, "IBAN": str, "N ORDRER": str})
+        except FileNotFoundError:
+            messagebox.showerror("Erreur", "Le fichier Excel pour les MARS est introuvable.")
+            return
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'ouverture du fichier Excel : {e}")
+            return
+
+        # Fenêtre principale
+        window = tk.Toplevel()
+        window.title("Liste des MARS Remplaçants")
+        window.geometry("550x500")
+
+        # Titre - directement dans la fenêtre principale, pas d'encadré supplémentaire
+        tk.Label(window, text="Liste des MARS Remplaçants", 
+                font=("Arial", 16, "bold"), bg="#4a90e2", fg="white", pady=10).pack(fill="x")
+
+        # Liste des MAR remplaçants - directement sous le titre
+        listbox = tk.Listbox(window, width=50, height=20, font=("Arial", 12))
+        listbox.pack(pady=5, fill="both", expand=True)
+        
+        # Ajouter une scrollbar à la listbox
+        scrollbar = ttk.Scrollbar(window, orient="vertical", command=listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+        listbox.config(yscrollcommand=scrollbar.set)
+
+        def update_listbox():
+            """Met à jour la liste des MARS affichée dans la Listbox."""
+            listbox.delete(0, tk.END)
+            for _, row in mar_data.iterrows():
+                listbox.insert(tk.END, f"{row['NOMR']} {row['PRENOMR']}")
+
+        update_listbox()  # Initialiser la liste
+        
+        # Fonctions pour les boutons
+        def delete_entry():
+            """Supprime un MAR remplaçant."""
+            selected_indices = listbox.curselection()
+            if not selected_indices:
+                messagebox.showerror("Erreur", "Aucun MAR sélectionné.")
+                return
+
+            selected_index = selected_indices[0]
+            selected_entry = mar_data.iloc[selected_index]
+
+            if not messagebox.askyesno("Confirmation", f"Supprimer {selected_entry['NOMR']} {selected_entry['PRENOMR']} ?"):
+                return
+
+            try:
+                mar_data.drop(index=selected_index, inplace=True)
+                mar_data.reset_index(drop=True, inplace=True)
+                save_excel_with_updated_sheet(file_paths["excel_mar"], "MARS Remplaçants", mar_data)
+                update_listbox()
+                messagebox.showinfo("Succès", f"MAR {selected_entry['NOMR']} {selected_entry['PRENOMR']} supprimé.")
+            except Exception as e:
+                messagebox.showerror("Erreur", f"Impossible de supprimer : {e}")
+
+        def add_entry():
+            """Ajouter un nouveau MARS remplaçant."""
+            add_window = tk.Toplevel(window)
+            add_window.title("Ajouter un MARS Remplaçant")
+            add_window.geometry("450x500")
+            add_window.grab_set()  # Rendre la fenêtre modale
+
+            # Variables pour les champs
+            fields = {
+                "Nom": tk.StringVar(),
+                "Prénom": tk.StringVar(),
+                "Email": tk.StringVar(),
+                "Adresse": tk.StringVar(),
+                "Numéro URSSAF": tk.StringVar(),
+                "Numéro Sécurité sociale": tk.StringVar(),
+                "IBAN": tk.StringVar(),
+                "Numéro de Conseil de l'Ordre": tk.StringVar()
+            }
+
+            # Création des champs
+            tk.Label(add_window, text="Ajouter un MARS Remplaçant", 
+                    font=("Arial", 14, "bold"), bg="#4a90e2", fg="white").pack(fill="x", pady=10)
+            
+            form_frame = tk.Frame(add_window)
+            form_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            
+            for idx, (label, var) in enumerate(fields.items()):
+                tk.Label(form_frame, text=label + ":").grid(row=idx, column=0, sticky="w", pady=5, padx=5)
+                tk.Entry(form_frame, textvariable=var, width=30).grid(row=idx, column=1, sticky="w", pady=5, padx=5)
+
+            def save_new_entry():
+                """Enregistre le nouveau MARS remplaçant."""
+                field_names = ["NOMR", "PRENOMR", "EMAILR", "AdresseR", "URSSAF", "secu", "IBAN", "N ORDRER"]
+                new_data = {field_names[i]: list(fields.values())[i].get() for i in range(len(field_names))}
+
+                if not all(new_data.values()):
+                    messagebox.showerror("Erreur", "Tous les champs doivent être remplis.")
+                    return
+
+                try:
+                    # Ajouter la nouvelle ligne
+                    mar_data.loc[len(mar_data)] = new_data
+                    
+                    # Sauvegarde dans Excel
+                    save_excel_with_updated_sheet(file_paths["excel_mar"], "MARS Remplaçants", mar_data)
+                    
+                    messagebox.showinfo("Succès", "MARS Remplaçant ajouté avec succès.")
+                    update_listbox()
+                    add_window.destroy()
+                except Exception as e:
+                    messagebox.showerror("Erreur", f"Impossible d'ajouter le MARS Remplaçant : {e}")
+
+            button_frame = tk.Frame(add_window)
+            button_frame.pack(fill="x", pady=10)
+            
+            tk.Button(button_frame, text="Enregistrer", command=save_new_entry, 
+                    bg="#4caf50", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Annuler", command=add_window.destroy, 
+                    bg="#f44336", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+
+        def modify_entry():
+            """Modifier un MARS remplaçant existant."""
+            selected_indices = listbox.curselection()
+            if not selected_indices:
+                messagebox.showerror("Erreur", "Aucun MAR sélectionné.")
+                return
+
+            selected_index = selected_indices[0]
+            selected_entry = mar_data.iloc[selected_index]
+
+            modify_window = tk.Toplevel(window)
+            modify_window.title(f"Modifier {selected_entry['NOMR']} {selected_entry['PRENOMR']}")
+            modify_window.geometry("450x500")
+            modify_window.grab_set()  # Rendre la fenêtre modale
+
+            # Création du titre
+            tk.Label(modify_window, text=f"Modifier {selected_entry['NOMR']} {selected_entry['PRENOMR']}", 
+                    font=("Arial", 14, "bold"), bg="#4a90e2", fg="white").pack(fill="x", pady=10)
+            
+            # Création du cadre pour le formulaire
+            form_frame = tk.Frame(modify_window)
+            form_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+            # Dictionnaire des noms de champs et leurs équivalents dans le DataFrame
+            field_map = {
+                "Nom": "NOMR",
+                "Prénom": "PRENOMR",
+                "Email": "EMAILR",
+                "Adresse": "AdresseR",
+                "Numéro URSSAF": "URSSAF",
+                "Numéro Sécurité sociale": "secu",
+                "IBAN": "IBAN",
+                "Numéro de Conseil de l'Ordre": "N ORDRER"
+            }
+            
+            # Variables pour les champs
+            fields = {}
+            
+            # Création des champs
+            for idx, (display_name, field_name) in enumerate(field_map.items()):
+                var = tk.StringVar(value=selected_entry.get(field_name, ""))
+                fields[field_name] = var
+                
+                tk.Label(form_frame, text=display_name + ":").grid(row=idx, column=0, sticky="w", pady=5, padx=5)
+                tk.Entry(form_frame, textvariable=var, width=30).grid(row=idx, column=1, sticky="w", pady=5, padx=5)
+
+            def save_changes():
+                """Enregistre les modifications d'un MAR remplaçant."""
+                for field_name, var in fields.items():
+                    mar_data.at[selected_index, field_name] = var.get()
+
+                try:
+                    # Sauvegarde dans Excel
+                    save_excel_with_updated_sheet(file_paths["excel_mar"], "MARS Remplaçants", mar_data)
+                    messagebox.showinfo("Succès", "Modifications enregistrées avec succès.")
+                    update_listbox()
+                    modify_window.destroy()
+                except Exception as e:
+                    messagebox.showerror("Erreur", f"Impossible d'enregistrer les modifications : {e}")
+
+            # Boutons
+            button_frame = tk.Frame(modify_window)
+            button_frame.pack(fill="x", pady=10)
+            
+            tk.Button(button_frame, text="Enregistrer", command=save_changes, 
+                    bg="#4caf50", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Annuler", command=modify_window.destroy, 
+                    bg="#f44336", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+
+        # Boutons d'action - directement en bas de la fenêtre
+        button_frame = tk.Frame(window)
+        button_frame.pack(pady=5)
+        
+        tk.Button(button_frame, text="➕ Ajouter", command=add_entry, 
+                bg="#4caf50", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+        tk.Button(button_frame, text="✏️ Modifier", command=modify_entry, 
+                bg="#2196f3", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+        tk.Button(button_frame, text="🗑️ Supprimer", command=delete_entry, 
+                bg="#f44336", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+   
+    def manage_iade_remplacants():
+        """Gérer les IADE remplaçants dans le fichier Excel."""
+        try:
+            iade_data = pd.read_excel(file_paths["excel_iade"], sheet_name="Coordonnées IADEs")
+        except FileNotFoundError:
+            messagebox.showerror("Erreur", "Le fichier Excel pour les IADEs est introuvable.")
+            return
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'ouverture du fichier Excel : {e}")
+            return
+
+        # Fenêtre principale
+        window = tk.Toplevel()
+        window.title("Liste des IADE Remplaçants")
+        window.geometry("550x500")
+
+        # Titre - directement dans la fenêtre principale
+        tk.Label(window, text="Liste des IADE Remplaçants", 
+                font=("Arial", 16, "bold"), bg="#4a90e2", fg="white", pady=10).pack(fill="x")
+
+        # Liste des IADE remplaçants - directement sous le titre
+        listbox = tk.Listbox(window, width=50, height=20, font=("Arial", 12))
+        listbox.pack(pady=5, fill="both", expand=True)
+        
+        # Ajouter une scrollbar à la listbox
+        scrollbar = ttk.Scrollbar(window, orient="vertical", command=listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+        listbox.config(yscrollcommand=scrollbar.set)
+
+        def update_listbox():
+            """Met à jour la liste des IADE affichée dans la Listbox."""
+            listbox.delete(0, tk.END)
+            for _, row in iade_data.iterrows():
+                listbox.insert(tk.END, f"{row['NOMR']} {row['PRENOMR']}")
+
+        update_listbox()  # Initialiser la liste
+        
+        # Fonctions pour les boutons
+        def delete_entry():
+            """Supprime un IADE remplaçant."""
+            selected_indices = listbox.curselection()
+            if not selected_indices:
+                messagebox.showerror("Erreur", "Aucun IADE sélectionné.")
+                return
+
+            selected_index = selected_indices[0]
+            selected_entry = iade_data.iloc[selected_index]
+
+            if not messagebox.askyesno("Confirmation", f"Supprimer {selected_entry['NOMR']} {selected_entry['PRENOMR']} ?"):
+                return
+
+            try:
+                iade_data.drop(index=selected_index, inplace=True)
+                iade_data.reset_index(drop=True, inplace=True)
+                save_excel_with_updated_sheet(file_paths["excel_iade"], "Coordonnées IADEs", iade_data)
+                update_listbox()
+                messagebox.showinfo("Succès", f"IADE {selected_entry['NOMR']} {selected_entry['PRENOMR']} supprimé(e).")
+            except Exception as e:
+                messagebox.showerror("Erreur", f"Impossible de supprimer : {e}")
+
+        def add_entry():
+            """Ajouter un nouvel IADE remplaçant."""
+            add_window = tk.Toplevel(window)
+            add_window.title("Ajouter un IADE Remplaçant")
+            add_window.geometry("500x600")
+            add_window.grab_set()  # Rendre la fenêtre modale
+
+            # Variables pour les champs
+            nom_var = tk.StringVar()
+            prenom_var = tk.StringVar()
+            email_var = tk.StringVar()
+            ddn_var = tk.StringVar()
+            lieu_naissance_var = tk.StringVar()
+            dept_naissance_var = tk.StringVar()
+            adresse_var = tk.StringVar()
+            secu_var = tk.StringVar()
+            nationalite_var = tk.StringVar()
+            iban_var = tk.StringVar()
+            sexe_var = tk.StringVar(value="Monsieur")
+            
+            # Variables dérivées du sexe
+            er_var = tk.StringVar()
+            ilr_var = tk.StringVar()
+            salarier_var = tk.StringVar()
+            
+            # Fonction pour mettre à jour les champs dérivés du sexe
+            def update_gender_fields(*args):
+                if sexe_var.get() == "Madame":
+                    er_var.set("e")
+                    ilr_var.set("elle")
+                    salarier_var.set("à la salariée")
+                else:
+                    er_var.set("")
+                    ilr_var.set("il")
+                    salarier_var.set("au salarié")
+            
+            # Lier la mise à jour automatique au changement de sexe
+            sexe_var.trace_add("write", update_gender_fields)
+            
+            # Mise à jour initiale des champs dérivés
+            update_gender_fields()
+
+            # Création du titre
+            tk.Label(add_window, text="Ajouter un IADE Remplaçant", 
+                    font=("Arial", 14, "bold"), bg="#4a90e2", fg="white").pack(fill="x", pady=10)
+            
+            # Cadre pour le formulaire
+            form_frame = tk.Frame(add_window)
+            form_frame.pack(fill="both", expand=True, padx=10, pady=5)
+            
+            # Configuration du formulaire
+            fields = [
+                ("Nom:", nom_var), 
+                ("Prénom:", prenom_var),
+                ("Date de naissance:", ddn_var),
+                ("Lieu de naissance:", lieu_naissance_var),
+                ("Département de naissance:", dept_naissance_var),
+                ("Nationalité:", nationalite_var),
+                ("Adresse:", adresse_var),
+                ("Email:", email_var),
+                ("N° Sécurité Sociale:", secu_var),
+                ("IBAN:", iban_var),
+                ("Sexe:", sexe_var, "dropdown", ["Monsieur", "Madame"]),
+                ("ER:", er_var, "readonly"),
+                ("ILR:", ilr_var, "readonly"),
+                ("SALARIER:", salarier_var, "readonly")
+            ]
+            
+            # Création des champs
+            for i, field in enumerate(fields):
+                if len(field) == 2:  # Champ texte standard
+                    label, var = field
+                    tk.Label(form_frame, text=label).grid(row=i, column=0, sticky="w", pady=5, padx=5)
+                    tk.Entry(form_frame, textvariable=var, width=30).grid(row=i, column=1, sticky="w", pady=5, padx=5)
+                elif len(field) == 4 and field[2] == "dropdown":  # Menu déroulant
+                    label, var, _, options = field
+                    tk.Label(form_frame, text=label).grid(row=i, column=0, sticky="w", pady=5, padx=5)
+                    tk.OptionMenu(form_frame, var, *options).grid(row=i, column=1, sticky="w", pady=5, padx=5)
+                elif len(field) == 3 and field[2] == "readonly":  # Champ en lecture seule
+                    label, var, _ = field
+                    tk.Label(form_frame, text=label).grid(row=i, column=0, sticky="w", pady=5, padx=5)
+                    tk.Entry(form_frame, textvariable=var, state="readonly", width=30).grid(row=i, column=1, sticky="w", pady=5, padx=5)
+
+            def save_new():
+                """Enregistre le nouvel IADE et met à jour Excel."""
+                # Vérification des champs obligatoires
+                if not nom_var.get().strip() or not prenom_var.get().strip():
+                    messagebox.showwarning("Attention", "Veuillez renseigner au moins le nom et le prénom.")
+                    return
+                
+                # Préparation des nouvelles données
+                new_row = {
+                    "NOMR": nom_var.get(),
+                    "PRENOMR": prenom_var.get(),
+                    "EMAIL": email_var.get(),
+                    "DDNR": ddn_var.get(),
+                    "LIEUNR": lieu_naissance_var.get(),
+                    "DPTN": dept_naissance_var.get(),
+                    "ADRESSER": adresse_var.get(),
+                    "NOSSR": secu_var.get(),
+                    "NATR": nationalite_var.get(),
+                    "SEXE": sexe_var.get(),
+                    "ER": er_var.get(),
+                    "ILR": ilr_var.get(),
+                    "SALARIER": salarier_var.get()
+                }
+                
+                # Ajouter IBAN s'il n'existe pas dans le DataFrame
+                if "IBAN" not in iade_data.columns:
+                    iade_data["IBAN"] = ""
+                new_row["IBAN"] = iban_var.get()
+                
+                try:
+                    # Ajout au DataFrame
+                    iade_data.loc[len(iade_data)] = new_row
+                    
+                    # Sauvegarde dans Excel
+                    save_excel_with_updated_sheet(file_paths["excel_iade"], "Coordonnées IADEs", iade_data)
+                    messagebox.showinfo("Succès", "IADE remplaçant ajouté avec succès.")
+                    
+                    # Mise à jour de l'affichage
+                    update_listbox()
+                    add_window.destroy()
+                except Exception as e:
+                    messagebox.showerror("Erreur", f"Erreur lors de l'ajout : {e}")
+
+            # Boutons de validation
+            button_frame = tk.Frame(add_window)
+            button_frame.pack(fill="x", pady=10)
+            
+            tk.Button(button_frame, text="Ajouter", command=save_new, 
+                    bg="#4caf50", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Annuler", command=add_window.destroy, 
+                    bg="#f44336", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+
+        def modify_entry():
+            """Modifier un IADE remplaçant."""
+            selected_indices = listbox.curselection()
+            if not selected_indices:
+                messagebox.showerror("Erreur", "Aucun IADE sélectionné.")
+                return
+
+            selected_index = selected_indices[0]
+            selected_entry = iade_data.iloc[selected_index]
+
+            modify_window = tk.Toplevel(window)
+            modify_window.title(f"Modifier {selected_entry['NOMR']} {selected_entry['PRENOMR']}")
+            modify_window.geometry("500x600")
+            modify_window.grab_set()  # Rendre la fenêtre modale
+
+            # Variables pour les champs
+            nom_var = tk.StringVar(value=selected_entry["NOMR"] if not pd.isna(selected_entry["NOMR"]) else "")
+            prenom_var = tk.StringVar(value=selected_entry["PRENOMR"] if not pd.isna(selected_entry["PRENOMR"]) else "")
+            email_var = tk.StringVar(value=selected_entry["EMAIL"] if not pd.isna(selected_entry["EMAIL"]) else "")
+            ddn_var = tk.StringVar(value=selected_entry["DDNR"] if not pd.isna(selected_entry["DDNR"]) else "")
+            lieu_naissance_var = tk.StringVar(value=selected_entry["LIEUNR"] if not pd.isna(selected_entry["LIEUNR"]) else "")
+            dept_naissance_var = tk.StringVar(value=selected_entry["DPTN"] if not pd.isna(selected_entry["DPTN"]) else "")
+            adresse_var = tk.StringVar(value=selected_entry["ADRESSER"] if not pd.isna(selected_entry["ADRESSER"]) else "")
+            secu_var = tk.StringVar(value=selected_entry["NOSSR"] if not pd.isna(selected_entry["NOSSR"]) else "")
+            nationalite_var = tk.StringVar(value=selected_entry["NATR"] if not pd.isna(selected_entry["NATR"]) else "")
+            iban_var = tk.StringVar(value=selected_entry.get("IBAN", "") if not pd.isna(selected_entry.get("IBAN", "")) else "")
+            sexe_var = tk.StringVar(value=selected_entry.get("SEXE", "Monsieur") if not pd.isna(selected_entry.get("SEXE", "")) else "Monsieur")
+            
+            # Fonction pour mettre à jour les champs dérivés du sexe
+            def update_gender_fields(*args):
+                if sexe_var.get() == "Madame":
+                    er_var.set("e")
+                    ilr_var.set("elle")
+                    salarier_var.set("à la salariée")
+                else:
+                    er_var.set("")
+                    ilr_var.set("il")
+                    salarier_var.set("au salarié")
+            
+            # Variables supplémentaires dérivées du sexe
+            er_var = tk.StringVar(value=selected_entry.get("ER", ""))
+            ilr_var = tk.StringVar(value=selected_entry.get("ILR", ""))
+            salarier_var = tk.StringVar(value=selected_entry.get("SALARIER", ""))
+            
+            # Lier la mise à jour automatique au changement de sexe
+            sexe_var.trace_add("write", update_gender_fields)
+            
+            # Mise à jour initiale des champs dérivés
+            update_gender_fields()
+
+            # Création du titre
+            tk.Label(modify_window, text=f"Modifier {selected_entry['NOMR']} {selected_entry['PRENOMR']}", 
+                    font=("Arial", 14, "bold"), bg="#4a90e2", fg="white").pack(fill="x", pady=10)
+            
+            # Cadre pour le formulaire
+            form_frame = tk.Frame(modify_window)
+            form_frame.pack(fill="both", expand=True, padx=10, pady=5)
+            
+            # Configuration du formulaire
+            fields = [
+                ("Nom:", nom_var), 
+                ("Prénom:", prenom_var),
+                ("Date de naissance:", ddn_var),
+                ("Lieu de naissance:", lieu_naissance_var),
+                ("Département de naissance:", dept_naissance_var),
+                ("Nationalité:", nationalite_var),
+                ("Adresse:", adresse_var),
+                ("Email:", email_var),
+                ("N° Sécurité Sociale:", secu_var),
+                ("IBAN:", iban_var),
+                ("Sexe:", sexe_var, "dropdown", ["Monsieur", "Madame"]),
+                ("ER:", er_var, "readonly"),
+                ("ILR:", ilr_var, "readonly"),
+                ("SALARIER:", salarier_var, "readonly")
+            ]
+            
+            # Création des champs
+            for i, field in enumerate(fields):
+                if len(field) == 2:  # Champ texte standard
+                    label, var = field
+                    tk.Label(form_frame, text=label).grid(row=i, column=0, sticky="w", pady=5, padx=5)
+                    tk.Entry(form_frame, textvariable=var, width=30).grid(row=i, column=1, sticky="w", pady=5, padx=5)
+                elif len(field) == 4 and field[2] == "dropdown":  # Menu déroulant
+                    label, var, _, options = field
+                    tk.Label(form_frame, text=label).grid(row=i, column=0, sticky="w", pady=5, padx=5)
+                    tk.OptionMenu(form_frame, var, *options).grid(row=i, column=1, sticky="w", pady=5, padx=5)
+                elif len(field) == 3 and field[2] == "readonly":  # Champ en lecture seule
+                    label, var, _ = field
+                    tk.Label(form_frame, text=label).grid(row=i, column=0, sticky="w", pady=5, padx=5)
+                    tk.Entry(form_frame, textvariable=var, state="readonly", width=30).grid(row=i, column=1, sticky="w", pady=5, padx=5)
+
+            def save_changes():
+                """Enregistre les modifications et met à jour Excel."""
+                # Mise à jour des données
+                iade_data.loc[selected_index, "NOMR"] = nom_var.get()
+                iade_data.loc[selected_index, "PRENOMR"] = prenom_var.get()
+                iade_data.loc[selected_index, "EMAIL"] = email_var.get()
+                iade_data.loc[selected_index, "DDNR"] = ddn_var.get()
+                iade_data.loc[selected_index, "LIEUNR"] = lieu_naissance_var.get()
+                iade_data.loc[selected_index, "DPTN"] = dept_naissance_var.get()
+                iade_data.loc[selected_index, "ADRESSER"] = adresse_var.get()
+                iade_data.loc[selected_index, "NOSSR"] = secu_var.get()
+                iade_data.loc[selected_index, "NATR"] = nationalite_var.get()
+                iade_data.loc[selected_index, "SEXE"] = sexe_var.get()
+                iade_data.loc[selected_index, "ER"] = er_var.get()
+                iade_data.loc[selected_index, "ILR"] = ilr_var.get()
+                iade_data.loc[selected_index, "SALARIER"] = salarier_var.get()
+                
+                # Ajouter IBAN s'il n'existe pas dans le DataFrame
+                if "IBAN" not in iade_data.columns:
+                    iade_data["IBAN"] = ""
+                iade_data.loc[selected_index, "IBAN"] = iban_var.get()
+                
+                try:
+                    # Sauvegarde dans Excel
+                    save_excel_with_updated_sheet(file_paths["excel_iade"], "Coordonnées IADEs", iade_data)
+                    messagebox.showinfo("Succès", "Modifications enregistrées avec succès.")
+                    
+                    # Mise à jour de l'affichage
+                    update_listbox()
+                    modify_window.destroy()
+                except Exception as e:
+                    messagebox.showerror("Erreur", f"Erreur lors de la sauvegarde : {e}")
+
+            # Boutons de validation
+            button_frame = tk.Frame(modify_window)
+            button_frame.pack(fill="x", pady=10)
+            
+            tk.Button(button_frame, text="Enregistrer", command=save_changes, 
+                    bg="#4caf50", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Annuler", command=modify_window.destroy, 
+                    bg="#f44336", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+
+        # Boutons d'action - directement sous la listbox
+        button_frame = tk.Frame(window)
+        button_frame.pack(pady=5)
+        
+        tk.Button(button_frame, text="➕ Ajouter", command=add_entry, 
+                bg="#4caf50", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+        tk.Button(button_frame, text="✏️ Modifier", command=modify_entry, 
+                bg="#2196f3", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+        tk.Button(button_frame, text="🗑️ Supprimer", command=delete_entry, 
+                bg="#f44336", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+   
+   
     
-    def manage_iade_remplacants(self):
-        """
-        Ouvre l'interface de gestion des IADE remplaçants.
-        """
-        self.status_bar.set_message("Ouverture de l'interface de gestion des IADE remplaçants...")
-        
-        # Nettoyage de l'interface existante si nécessaire
-        for widget in self.settings_tab.winfo_children():
-            if isinstance(widget, TabView):
-                continue
-            widget.destroy()
-        
-        # Créer un cadre pour l'interface de gestion des IADE remplaçants
-        management_frame = create_frame(self.settings_tab)
-        management_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Bouton de retour
-        return_frame = create_frame(management_frame, bg=COLORS["secondary"])
-        return_frame.pack(fill="x", pady=(0, 10))
-        
-        create_button(
-            return_frame,
-            text="🔙 Retour aux paramètres",
-            command=lambda: self.create_settings_tab(),
-            style="neutral",
-            width=20
-        ).pack(side="left", padx=5, pady=5)
-        
-        # Titre
-        create_label(
-            management_frame,
-            "Gestion des IADE remplaçants",
-            style="title"
-        ).pack(pady=10)
-        
-        try:
-            # Chargement des données depuis la bonne feuille
-            excel_path = get_file_path("excel_iade", verify_exists=True)
-            if not excel_path:
-                raise ValueError("Le chemin du fichier Excel IADE n'est pas défini.")
-            
-            iade_data = pd.read_excel(excel_path, sheet_name="Coordonnées IADEs")
-            
-            # Cadre principal
-            main_frame = create_frame(management_frame, bg=COLORS["secondary"])
-            main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-            
-            # Créer une listbox pour afficher les IADE remplaçants
-            listbox = tk.Listbox(main_frame, width=50, height=15, font=("Arial", 12))
-            listbox.pack(side="left", fill="both", expand=True, padx=5, pady=10)
-            
-            # Ajouter une scrollbar
-            scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=listbox.yview)
-            scrollbar.pack(side="right", fill="y")
-            listbox.config(yscrollcommand=scrollbar.set)
-            
-            # Variable pour stocker les données
-            iade_data_list = []
-            
-            def refresh_listbox():
-                """Met à jour la liste des IADE affichée dans la Listbox."""
-                listbox.delete(0, tk.END)
-                iade_data_list.clear()
-                
-                for _, row in iade_data.iterrows():
-                    nom = row["NOMR"] if not pd.isna(row["NOMR"]) else ""
-                    prenom = row["PRENOMR"] if not pd.isna(row["PRENOMR"]) else ""
-                    full_name = f"{nom} {prenom}".strip()
-                    iade_data_list.append(row)
-                    listbox.insert(tk.END, full_name)
-            
-            # Remplir la listbox initialement
-            refresh_listbox()
-            
-            # Fonctions pour les boutons
-            def on_modify():
-                """Modifier un IADE remplaçant."""
-                selected_index = listbox.curselection()
-                if not selected_index:
-                    show_warning("Avertissement", "Veuillez sélectionner un IADE.")
-                    return
-                
-                selected_index = selected_index[0]
-                selected_row = iade_data_list[selected_index]
-                
-                # Créer une fenêtre de modification
-                modify_window = tk.Toplevel(management_frame.winfo_toplevel())
-                modify_window.title("Modifier un IADE remplaçant")
-                modify_window.geometry("500x600")
-                modify_window.grab_set()  # Rendre la fenêtre modale
-                
-                # Variables pour les champs
-                nom_var = StringVar(value=selected_row["NOMR"] if not pd.isna(selected_row["NOMR"]) else "")
-                prenom_var = StringVar(value=selected_row["PRENOMR"] if not pd.isna(selected_row["PRENOMR"]) else "")
-                email_var = StringVar(value=selected_row["EMAIL"] if not pd.isna(selected_row["EMAIL"]) else "")
-                ddn_var = StringVar(value=selected_row["DDNR"] if not pd.isna(selected_row["DDNR"]) else "")
-                lieu_naissance_var = StringVar(value=selected_row["LIEUNR"] if not pd.isna(selected_row["LIEUNR"]) else "")
-                dept_naissance_var = StringVar(value=selected_row["DPTN"] if not pd.isna(selected_row["DPTN"]) else "")
-                adresse_var = StringVar(value=selected_row["ADRESSER"] if not pd.isna(selected_row["ADRESSER"]) else "")
-                secu_var = StringVar(value=selected_row["NOSSR"] if not pd.isna(selected_row["NOSSR"]) else "")
-                nationalite_var = StringVar(value=selected_row["NATR"] if not pd.isna(selected_row["NATR"]) else "")
-                iban_var = StringVar(value=selected_row.get("IBAN", "") if not pd.isna(selected_row.get("IBAN", "")) else "")
-                sexe_var = StringVar(value=selected_row.get("SEXE", "Monsieur") if not pd.isna(selected_row.get("SEXE", "")) else "Monsieur")
-                
-                # Fonction pour mettre à jour les champs dérivés du sexe
-                def update_gender_fields(*args):
-                    if sexe_var.get() == "Madame":
-                        er_var.set("e")
-                        ilr_var.set("elle")
-                        salarier_var.set("à la salariée")
-                    else:
-                        er_var.set("")
-                        ilr_var.set("il")
-                        salarier_var.set("au salarié")
-                
-                # Variables supplémentaires dérivées du sexe
-                er_var = StringVar(value=selected_row.get("ER", ""))
-                ilr_var = StringVar(value=selected_row.get("ILR", ""))
-                salarier_var = StringVar(value=selected_row.get("SALARIER", ""))
-                
-                # Lier la mise à jour automatique au changement de sexe
-                sexe_var.trace_add("write", update_gender_fields)
-                
-                # Mise à jour initiale des champs dérivés
-                update_gender_fields()
-                
-                # Création des champs
-                padx, pady = 10, 5
-                row = 0
-                
-                ttk.Label(modify_window, text="Nom:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=nom_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Prénom:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=prenom_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Date de naissance:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=ddn_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Lieu de naissance:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=lieu_naissance_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Département de naissance:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=dept_naissance_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Nationalité:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=nationalite_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Adresse:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=adresse_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Email:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=email_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="N° Sécurité Sociale:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=secu_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="IBAN:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=iban_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Sexe:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.OptionMenu(modify_window, sexe_var, "Monsieur", "Madame").grid(row=row, column=1, sticky="w", padx=padx, pady=pady)
-                row += 1
-                
-                # Champs dérivés du sexe (non modifiables)
-                ttk.Label(modify_window, text="ER:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=er_var, state="readonly", width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="ILR:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=ilr_var, state="readonly", width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="SALARIER:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=salarier_var, state="readonly", width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                def save_changes():
-                    """Enregistre les modifications et met à jour Excel."""
-                    # Mise à jour des données
-                    iade_data.loc[selected_index, "NOMR"] = nom_var.get()
-                    iade_data.loc[selected_index, "PRENOMR"] = prenom_var.get()
-                    iade_data.loc[selected_index, "EMAIL"] = email_var.get()
-                    iade_data.loc[selected_index, "DDNR"] = ddn_var.get()
-                    iade_data.loc[selected_index, "LIEUNR"] = lieu_naissance_var.get()
-                    iade_data.loc[selected_index, "DPTN"] = dept_naissance_var.get()
-                    iade_data.loc[selected_index, "ADRESSER"] = adresse_var.get()
-                    iade_data.loc[selected_index, "NOSSR"] = secu_var.get()
-                    iade_data.loc[selected_index, "NATR"] = nationalite_var.get()
-                    iade_data.loc[selected_index, "SEXE"] = sexe_var.get()
-                    iade_data.loc[selected_index, "ER"] = er_var.get()
-                    iade_data.loc[selected_index, "ILR"] = ilr_var.get()
-                    iade_data.loc[selected_index, "SALARIER"] = salarier_var.get()
-                    
-                    # Ajouter IBAN s'il n'existe pas dans le DataFrame
-                    if "IBAN" not in iade_data.columns:
-                        iade_data["IBAN"] = ""
-                    iade_data.loc[selected_index, "IBAN"] = iban_var.get()
-                    
-                    try:
-                        # Sauvegarde dans Excel
-                        from modules.contracts.contrat53_new import save_excel_with_updated_sheet
-                        save_excel_with_updated_sheet(excel_path, "Coordonnées IADEs", iade_data)
-                        show_success("Succès", "Modifications enregistrées avec succès.")
-                        
-                        # Mise à jour de l'affichage
-                        refresh_listbox()
-                        modify_window.destroy()
-                    except Exception as e:
-                        show_error("Erreur", f"Erreur lors de la sauvegarde : {e}")
-                
-                # Boutons de validation
-                buttons_frame = tk.Frame(modify_window)
-                buttons_frame.grid(row=row, column=0, columnspan=2, pady=15)
-                
-                ttk.Button(buttons_frame, text="Enregistrer", command=save_changes).pack(side="left", padx=10)
-                ttk.Button(buttons_frame, text="Annuler", command=modify_window.destroy).pack(side="left", padx=10)
-            
-            def on_add():
-                """Ajouter un nouveau IADE remplaçant."""
-                # Créer une fenêtre d'ajout
-                add_window = tk.Toplevel(management_frame.winfo_toplevel())
-                add_window.title("Ajouter un IADE remplaçant")
-                add_window.geometry("500x600")
-                add_window.grab_set()  # Rendre la fenêtre modale
-                
-                # Variables pour les champs
-                nom_var = StringVar()
-                prenom_var = StringVar()
-                email_var = StringVar()
-                ddn_var = StringVar()
-                lieu_naissance_var = StringVar()
-                dept_naissance_var = StringVar()
-                adresse_var = StringVar()
-                secu_var = StringVar()
-                nationalite_var = StringVar()
-                iban_var = StringVar()
-                sexe_var = StringVar(value="Monsieur")
-                
-                # Variables dérivées du sexe
-                er_var = StringVar()
-                ilr_var = StringVar()
-                salarier_var = StringVar()
-                
-                # Fonction pour mettre à jour les champs dérivés du sexe
-                def update_gender_fields(*args):
-                    if sexe_var.get() == "Madame":
-                        er_var.set("e")
-                        ilr_var.set("elle")
-                        salarier_var.set("à la salariée")
-                    else:
-                        er_var.set("")
-                        ilr_var.set("il")
-                        salarier_var.set("au salarié")
-                
-                # Lier la mise à jour automatique au changement de sexe
-                sexe_var.trace_add("write", update_gender_fields)
-                
-                # Mise à jour initiale des champs dérivés
-                update_gender_fields()
-                
-                # Création des champs
-                padx, pady = 10, 5
-                row = 0
-                
-                ttk.Label(add_window, text="Nom:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=nom_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Prénom:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=prenom_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Date de naissance:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=ddn_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Lieu de naissance:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=lieu_naissance_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Département de naissance:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=dept_naissance_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Nationalité:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=nationalite_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Adresse:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=adresse_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Email:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=email_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="N° Sécurité Sociale:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=secu_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="IBAN:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=iban_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Sexe:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.OptionMenu(add_window, sexe_var, "Monsieur", "Madame").grid(row=row, column=1, sticky="w", padx=padx, pady=pady)
-                row += 1
-                
-                # Champs dérivés du sexe (non modifiables)
-                ttk.Label(add_window, text="ER:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=er_var, state="readonly", width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="ILR:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=ilr_var, state="readonly", width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="SALARIER:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=salarier_var, state="readonly", width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                def save_new():
-                    """Enregistre le nouveau IADE et met à jour Excel."""
-                    # Vérification des champs obligatoires
-                    if not nom_var.get().strip() or not prenom_var.get().strip():
-                        show_warning("Attention", "Veuillez renseigner au moins le nom et le prénom.")
-                        return
-                    
-                    # Préparation des nouvelles données
-                    new_row = {
-                        "NOMR": nom_var.get(),
-                        "PRENOMR": prenom_var.get(),
-                        "EMAIL": email_var.get(),
-                        "DDNR": ddn_var.get(),
-                        "LIEUNR": lieu_naissance_var.get(),
-                        "DPTN": dept_naissance_var.get(),
-                        "ADRESSER": adresse_var.get(),
-                        "NOSSR": secu_var.get(),
-                        "NATR": nationalite_var.get(),
-                        "SEXE": sexe_var.get(),
-                        "ER": er_var.get(),
-                        "ILR": ilr_var.get(),
-                        "SALARIER": salarier_var.get()
-                    }
-                    
-                    # Ajouter IBAN s'il n'existe pas dans le DataFrame
-                    if "IBAN" not in iade_data.columns:
-                        iade_data["IBAN"] = ""
-                    new_row["IBAN"] = iban_var.get()
-                    
-                    try:
-                        # Ajout au DataFrame
-                        iade_data.loc[len(iade_data)] = new_row
-                        
-                        # Sauvegarde dans Excel
-                        from modules.contracts.contrat53_new import save_excel_with_updated_sheet
-                        save_excel_with_updated_sheet(excel_path, "Coordonnées IADEs", iade_data)
-                        show_success("Succès", "IADE remplaçant ajouté avec succès.")
-                        
-                        # Mise à jour de l'affichage
-                        refresh_listbox()
-                        add_window.destroy()
-                    except Exception as e:
-                        show_error("Erreur", f"Erreur lors de l'ajout : {e}")
-                
-                # Boutons de validation
-                buttons_frame = tk.Frame(add_window)
-                buttons_frame.grid(row=row, column=0, columnspan=2, pady=15)
-                
-                ttk.Button(buttons_frame, text="Ajouter", command=save_new).pack(side="left", padx=10)
-                ttk.Button(buttons_frame, text="Annuler", command=add_window.destroy).pack(side="left", padx=10)
-            
-            def on_delete():
-                """Supprimer un IADE remplaçant."""
-                selected_index = listbox.curselection()
-                if not selected_index:
-                    show_warning("Avertissement", "Veuillez sélectionner un IADE.")
-                    return
-                
-                selected_index = selected_index[0]
-                selected_row = iade_data_list[selected_index]
-                
-                # Confirmation de suppression
-                nom = selected_row["NOMR"] if not pd.isna(selected_row["NOMR"]) else ""
-                prenom = selected_row["PRENOMR"] if not pd.isna(selected_row["PRENOMR"]) else ""
-                full_name = f"{nom} {prenom}".strip()
-                
-                if ask_question("Confirmation", f"Voulez-vous vraiment supprimer {full_name} ?"):
-                    try:
-                        # Suppression de la ligne
-                        iade_data.drop(iade_data.index[selected_index], inplace=True)
-                        iade_data.reset_index(drop=True, inplace=True)
-                        
-                        # Sauvegarde dans Excel
-                        from modules.contracts.contrat53_new import save_excel_with_updated_sheet
-                        save_excel_with_updated_sheet(excel_path, "Coordonnées IADEs", iade_data)
-                        show_success("Succès", f"{full_name} supprimé avec succès.")
-                        
-                        # Mise à jour de l'affichage
-                        refresh_listbox()
-                    except Exception as e:
-                        show_error("Erreur", f"Erreur lors de la suppression : {e}")
-            
-            # Boutons d'action
-            buttons_frame = create_frame(management_frame)
-            buttons_frame.pack(pady=10)
-            
-            create_button(
-                buttons_frame, 
-                text="➕ Ajouter", 
-                command=on_add,
-                style="primary",
-                width=15
-            ).pack(side="left", padx=10)
-            
-            create_button(
-                buttons_frame, 
-                text="✏️ Modifier", 
-                command=on_modify,
-                style="info",
-                width=15
-            ).pack(side="left", padx=10)
-            
-            create_button(
-                buttons_frame, 
-                text="🗑️ Supprimer", 
-                command=on_delete,
-                style="danger",
-                width=15
-            ).pack(side="left", padx=10)
-            
-            self.status_bar.set_message("Interface de gestion des IADE remplaçants ouverte.")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            show_error("Erreur", f"Impossible d'ouvrir l'interface de gestion des IADE remplaçants: {str(e)}")
-            self.status_bar.set_message("Erreur lors de l'ouverture de l'interface de gestion des IADE remplaçants.")
 
 
-        
-    def manage_salaries(self):
-        """
-        Ouvre l'interface de gestion des salariés.
-        """
-        self.status_bar.set_message("Ouverture de l'interface de gestion des salariés...")
-        
-        # Nettoyage de l'interface existante si nécessaire
-        for widget in self.settings_tab.winfo_children():
-            if isinstance(widget, TabView):
-                continue
-            widget.destroy()
-        
-        # Créer un cadre pour l'interface de gestion des salariés
-        management_frame = create_frame(self.settings_tab)
-        management_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Bouton de retour
-        return_frame = create_frame(management_frame, bg=COLORS["secondary"])
-        return_frame.pack(fill="x", pady=(0, 10))
-        
-        create_button(
-            return_frame,
-            text="🔙 Retour aux paramètres",
-            command=lambda: self.create_settings_tab(),
-            style="neutral",
-            width=20
-        ).pack(side="left", padx=5, pady=5)
-        
-        # Titre
-        create_label(
-            management_frame,
-            "Gestion des salariés",
-            style="title"
-        ).pack(pady=10)
-        
+    def manage_salaries():
+        """Fenêtre pour gérer la liste des salariés."""
         try:
-            # Chargement des données depuis la bonne feuille
-            excel_path = get_file_path("excel_salaries", verify_exists=True)
-            if not excel_path:
-                raise ValueError("Le chemin du fichier Excel des salariés n'est pas défini.")
-            
-            salaries_data = pd.read_excel(excel_path, sheet_name="Salariés")
-            
-            # Cadre principal
-            main_frame = create_frame(management_frame, bg=COLORS["secondary"])
-            main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-            
-            # Créer une listbox pour afficher les salariés
-            listbox = tk.Listbox(main_frame, width=50, height=15, font=("Arial", 12))
-            listbox.pack(side="left", fill="both", expand=True, padx=5, pady=10)
-            
-            # Ajouter une scrollbar
-            scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=listbox.yview)
-            scrollbar.pack(side="right", fill="y")
-            listbox.config(yscrollcommand=scrollbar.set)
-            
-            # Variable pour stocker les données
-            salaries_list = []
-            
-            def refresh_listbox():
-                """Met à jour la liste des salariés affichée dans la Listbox."""
-                listbox.delete(0, tk.END)
-                salaries_list.clear()
-                
-                for _, row in salaries_data.iterrows():
-                    nom = row["NOM"] if not pd.isna(row["NOM"]) else ""
-                    prenom = row["PRENOM"] if not pd.isna(row["PRENOM"]) else ""
-                    poste = row.get("POSTE", "") if "POSTE" in row and not pd.isna(row["POSTE"]) else ""
-                    full_name = f"{nom} {prenom}" + (f" - {poste}" if poste else "")
-                    salaries_list.append(row)
-                    listbox.insert(tk.END, full_name.strip())
-            
-            # Remplir la listbox initialement
-            refresh_listbox()
-            
-            # Fonctions pour les boutons
-            def on_modify():
-                """Modifier un salarié."""
-                selected_index = listbox.curselection()
-                if not selected_index:
-                    show_warning("Avertissement", "Veuillez sélectionner un salarié.")
-                    return
-                
-                selected_index = selected_index[0]
-                selected_row = salaries_list[selected_index]
-                
-                # Créer une fenêtre de modification
-                modify_window = tk.Toplevel(management_frame.winfo_toplevel())
-                modify_window.title("Modifier un salarié")
-                modify_window.geometry("500x500")
-                modify_window.grab_set()  # Rendre la fenêtre modale
-                
-                # Variables pour les champs
-                nom_var = StringVar(value=selected_row["NOM"] if not pd.isna(selected_row["NOM"]) else "")
-                prenom_var = StringVar(value=selected_row["PRENOM"] if not pd.isna(selected_row["PRENOM"]) else "")
-                email_var = StringVar(value=selected_row["EMAIL"] if not pd.isna(selected_row["EMAIL"]) else "")
-                poste_var = StringVar(value=selected_row.get("POSTE", "") if "POSTE" in selected_row and not pd.isna(selected_row["POSTE"]) else "")
-                adresse_var = StringVar(value=selected_row.get("ADRESSE", "") if "ADRESSE" in selected_row and not pd.isna(selected_row["ADRESSE"]) else "")
-                iban_var = StringVar(value=selected_row.get("IBAN", "") if "IBAN" in selected_row and not pd.isna(selected_row["IBAN"]) else "")
-                
-                # Création des champs
-                padx, pady = 10, 5
-                row = 0
-                
-                ttk.Label(modify_window, text="Nom:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=nom_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Prénom:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=prenom_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Email:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=email_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Poste:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=poste_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="Adresse:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=adresse_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(modify_window, text="IBAN:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(modify_window, textvariable=iban_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                def save_changes():
-                    """Enregistre les modifications et met à jour Excel."""
-                    # Mise à jour des données
-                    salaries_data.loc[selected_index, "NOM"] = nom_var.get()
-                    salaries_data.loc[selected_index, "PRENOM"] = prenom_var.get()
-                    salaries_data.loc[selected_index, "EMAIL"] = email_var.get()
-                    
-                    # Mise à jour des champs optionnels
-                    # Vérifier que les colonnes existent, sinon les créer
-                    for col_name, var in [
-                        ("POSTE", poste_var),
-                        ("ADRESSE", adresse_var),
-                        ("IBAN", iban_var)
-                    ]:
-                        if col_name not in salaries_data.columns:
-                            salaries_data[col_name] = ""
-                        salaries_data.loc[selected_index, col_name] = var.get()
-                    
-                    try:
-                        # Sauvegarde dans Excel
-                        from modules.contracts.contrat53_new import save_excel_with_updated_sheet
-                        save_excel_with_updated_sheet(excel_path, "Salariés", salaries_data)
-                        show_success("Succès", "Modifications enregistrées avec succès.")
-                        
-                        # Mise à jour de l'affichage
-                        refresh_listbox()
-                        modify_window.destroy()
-                    except Exception as e:
-                        show_error("Erreur", f"Erreur lors de la sauvegarde : {e}")
-                
-                # Boutons de validation
-                buttons_frame = tk.Frame(modify_window)
-                buttons_frame.grid(row=row, column=0, columnspan=2, pady=15)
-                
-                ttk.Button(buttons_frame, text="Enregistrer", command=save_changes).pack(side="left", padx=10)
-                ttk.Button(buttons_frame, text="Annuler", command=modify_window.destroy).pack(side="left", padx=10)
-            
-            def on_add():
-                """Ajouter un nouveau salarié."""
-                # Créer une fenêtre d'ajout
-                add_window = tk.Toplevel(management_frame.winfo_toplevel())
-                add_window.title("Ajouter un salarié")
-                add_window.geometry("500x500")
-                add_window.grab_set()  # Rendre la fenêtre modale
-                
-                # Variables pour les champs
-                nom_var = StringVar()
-                prenom_var = StringVar()
-                email_var = StringVar()
-                poste_var = StringVar()
-                adresse_var = StringVar()
-                iban_var = StringVar()
-                
-                # Création des champs
-                padx, pady = 10, 5
-                row = 0
-                
-                ttk.Label(add_window, text="Nom:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=nom_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Prénom:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=prenom_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Email:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=email_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Poste:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=poste_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="Adresse:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=adresse_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                ttk.Label(add_window, text="IBAN:").grid(row=row, column=0, sticky="w", padx=padx, pady=pady)
-                ttk.Entry(add_window, textvariable=iban_var, width=30).grid(row=row, column=1, padx=padx, pady=pady)
-                row += 1
-                
-                def save_new():
-                    """Enregistre le nouveau salarié et met à jour Excel."""
-                    # Vérification des champs obligatoires
-                    if not nom_var.get().strip() or not prenom_var.get().strip():
-                        show_warning("Attention", "Veuillez renseigner au moins le nom et le prénom.")
-                        return
-                    
-                    # Préparation des nouvelles données
-                    new_row = {
-                        "NOM": nom_var.get(),
-                        "PRENOM": prenom_var.get(),
-                        "EMAIL": email_var.get()
-                    }
-                    
-                    # Ajout des champs optionnels
-                    for col_name, var in [
-                        ("POSTE", poste_var),
-                        ("ADRESSE", adresse_var),
-                        ("IBAN", iban_var)
-                    ]:
-                        if col_name not in salaries_data.columns:
-                            salaries_data[col_name] = ""
-                        new_row[col_name] = var.get()
-                    
-                    try:
-                        # Ajout au DataFrame
-                        salaries_data.loc[len(salaries_data)] = new_row
-                        
-                        # Sauvegarde dans Excel
-                        from modules.contracts.contrat53_new import save_excel_with_updated_sheet
-                        save_excel_with_updated_sheet(excel_path, "Salariés", salaries_data)
-                        show_success("Succès", "Salarié ajouté avec succès.")
-                        
-                        # Mise à jour de l'affichage
-                        refresh_listbox()
-                        add_window.destroy()
-                    except Exception as e:
-                        show_error("Erreur", f"Erreur lors de l'ajout : {e}")
-                
-                # Boutons de validation
-                buttons_frame = tk.Frame(add_window)
-                buttons_frame.grid(row=row, column=0, columnspan=2, pady=15)
-                
-                ttk.Button(buttons_frame, text="Ajouter", command=save_new).pack(side="left", padx=10)
-                ttk.Button(buttons_frame, text="Annuler", command=add_window.destroy).pack(side="left", padx=10)
-            
-            def on_delete():
-                """Supprimer un salarié."""
-                selected_index = listbox.curselection()
-                if not selected_index:
-                    show_warning("Avertissement", "Veuillez sélectionner un salarié.")
-                    return
-                
-                selected_index = selected_index[0]
-                selected_row = salaries_list[selected_index]
-                
-                # Confirmation de suppression
-                nom = selected_row["NOM"] if not pd.isna(selected_row["NOM"]) else ""
-                prenom = selected_row["PRENOM"] if not pd.isna(selected_row["PRENOM"]) else ""
-                full_name = f"{nom} {prenom}".strip()
-                
-                if ask_question("Confirmation", f"Voulez-vous vraiment supprimer {full_name} ?"):
-                    try:
-                        # Suppression de la ligne
-                        salaries_data.drop(salaries_data.index[selected_index], inplace=True)
-                        salaries_data.reset_index(drop=True, inplace=True)
-                        
-                        # Sauvegarde dans Excel
-                        from modules.contracts.contrat53_new import save_excel_with_updated_sheet
-                        save_excel_with_updated_sheet(excel_path, "Salariés", salaries_data)
-                        show_success("Succès", f"{full_name} supprimé avec succès.")
-                        
-                        # Mise à jour de l'affichage
-                        refresh_listbox()
-                    except Exception as e:
-                        show_error("Erreur", f"Erreur lors de la suppression : {e}")
-            
-            # Boutons d'action
-            buttons_frame = create_frame(management_frame)
-            buttons_frame.pack(pady=10)
-            
-            create_button(
-                buttons_frame, 
-                text="➕ Ajouter", 
-                command=on_add,
-                style="primary",
-                width=15
-            ).pack(side="left", padx=10)
-            
-            create_button(
-                buttons_frame, 
-                text="✏️ Modifier", 
-                command=on_modify,
-                style="info",
-                width=15
-            ).pack(side="left", padx=10)
-            
-            create_button(
-                buttons_frame, 
-                text="🗑️ Supprimer", 
-                command=on_delete,
-                style="danger",
-                width=15
-            ).pack(side="left", padx=10)
-            
-            self.status_bar.set_message("Interface de gestion des salariés ouverte.")
+            salaries_data = pd.read_excel(file_paths["excel_salaries"], sheet_name="Salariés")
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            show_error("Erreur", f"Impossible d'ouvrir l'interface de gestion des salariés: {str(e)}")
-            
+            messagebox.showerror("Erreur", f"Impossible de charger la liste des salariés : {e}")
+            return
+
+        # Fenêtre principale
+        window = tk.Toplevel()
+        window.title("Liste des Salariés")
+        window.geometry("550x500")
+
+        # Titre - directement dans la fenêtre principale
+        tk.Label(window, text="Liste des Salariés", 
+                font=("Arial", 16, "bold"), bg="#4a90e2", fg="white", pady=10).pack(fill="x")
+
+        # Liste des salariés - directement sous le titre
+        listbox = tk.Listbox(window, width=50, height=20, font=("Arial", 12))
+        listbox.pack(pady=5, fill="both", expand=True)
         
+        # Ajouter une scrollbar à la listbox
+        scrollbar = ttk.Scrollbar(window, orient="vertical", command=listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+        listbox.config(yscrollcommand=scrollbar.set)
+
+        def refresh_listbox():
+            """Met à jour la liste des salariés dans la Listbox."""
+            listbox.delete(0, tk.END)
+            for _, row in salaries_data.iterrows():
+                nom = row["NOM"] if not pd.isna(row["NOM"]) else ""
+                prenom = row["PRENOM"] if not pd.isna(row["PRENOM"]) else ""
+                poste = row.get("POSTE", "") if "POSTE" in row and not pd.isna(row["POSTE"]) else ""
+                full_name = f"{nom} {prenom}" + (f" - {poste}" if poste else "")
+                listbox.insert(tk.END, full_name.strip())
+
+        # Remplir la listbox initialement
+        refresh_listbox()
+
+        def on_modify():
+            """Modifier les informations du salarié sélectionné."""
+            selected_indices = listbox.curselection()
+            if not selected_indices:
+                messagebox.showwarning("Avertissement", "Veuillez sélectionner un salarié.")
+                return
+
+            selected_index = selected_indices[0]
+            selected_row = salaries_data.iloc[selected_index]
+
+            modify_window = tk.Toplevel(window)
+            modify_window.title(f"Modifier {selected_row['NOM']} {selected_row['PRENOM']}")
+            modify_window.geometry("450x400")
+            modify_window.grab_set()  # Rendre la fenêtre modale
+
+            # Variables pour les champs
+            nom_var = tk.StringVar(value=selected_row["NOM"] if not pd.isna(selected_row["NOM"]) else "")
+            prenom_var = tk.StringVar(value=selected_row["PRENOM"] if not pd.isna(selected_row["PRENOM"]) else "")
+            email_var = tk.StringVar(value=selected_row["EMAIL"] if not pd.isna(selected_row["EMAIL"]) else "")
+            poste_var = tk.StringVar(value=selected_row.get("POSTE", "") if "POSTE" in selected_row and not pd.isna(selected_row["POSTE"]) else "")
+            adresse_var = tk.StringVar(value=selected_row.get("ADRESSE", "") if "ADRESSE" in selected_row and not pd.isna(selected_row["ADRESSE"]) else "")
+            iban_var = tk.StringVar(value=selected_row.get("IBAN", "") if "IBAN" in selected_row and not pd.isna(selected_row["IBAN"]) else "")
+
+            # Titre
+            tk.Label(modify_window, text=f"Modifier {selected_row['NOM']} {selected_row['PRENOM']}", 
+                    font=("Arial", 14, "bold"), bg="#4a90e2", fg="white").pack(fill="x", pady=10)
+            
+            # Création des champs
+            form_frame = tk.Frame(modify_window)
+            form_frame.pack(fill="both", expand=True, padx=10, pady=5)
+            
+            fields = [
+                ("Nom:", nom_var),
+                ("Prénom:", prenom_var),
+                ("Email:", email_var),
+                ("Poste:", poste_var),
+                ("Adresse:", adresse_var),
+                ("IBAN:", iban_var)
+            ]
+            
+            for i, (label, var) in enumerate(fields):
+                tk.Label(form_frame, text=label).grid(row=i, column=0, sticky="w", pady=5, padx=5)
+                tk.Entry(form_frame, textvariable=var, width=30).grid(row=i, column=1, sticky="w", pady=5, padx=5)
+
+            def save_changes():
+                """Enregistre les modifications et met à jour Excel."""
+                # Mise à jour des données
+                salaries_data.loc[selected_index, "NOM"] = nom_var.get()
+                salaries_data.loc[selected_index, "PRENOM"] = prenom_var.get()
+                salaries_data.loc[selected_index, "EMAIL"] = email_var.get()
+                
+                # Mise à jour des champs optionnels
+                # Vérifier que les colonnes existent, sinon les créer
+                for col_name, var in [
+                    ("POSTE", poste_var),
+                    ("ADRESSE", adresse_var),
+                    ("IBAN", iban_var)
+                ]:
+                    if col_name not in salaries_data.columns:
+                        salaries_data[col_name] = ""
+                    salaries_data.loc[selected_index, col_name] = var.get()
+                
+                try:
+                    # Sauvegarde dans Excel
+                    save_excel_with_updated_sheet(file_paths["excel_salaries"], "Salariés", salaries_data)
+                    messagebox.showinfo("Succès", "Modifications enregistrées avec succès.")
+                    
+                    # Mise à jour de l'affichage
+                    refresh_listbox()
+                    modify_window.destroy()
+                except Exception as e:
+                    messagebox.showerror("Erreur", f"Erreur lors de la sauvegarde : {e}")
+
+            # Boutons
+            button_frame = tk.Frame(modify_window)
+            button_frame.pack(fill="x", pady=10)
+            
+            tk.Button(button_frame, text="Enregistrer", command=save_changes, 
+                    bg="#4caf50", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Annuler", command=modify_window.destroy, 
+                    bg="#f44336", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+
+        def on_add():
+            """Ajouter un nouveau salarié."""
+            add_window = tk.Toplevel(window)
+            add_window.title("Ajouter un salarié")
+            add_window.geometry("450x400")
+            add_window.grab_set()  # Rendre la fenêtre modale
+            
+            # Variables pour les champs
+            nom_var = tk.StringVar()
+            prenom_var = tk.StringVar()
+            email_var = tk.StringVar()
+            poste_var = tk.StringVar()
+            adresse_var = tk.StringVar()
+            iban_var = tk.StringVar()
+            
+            # Titre
+            tk.Label(add_window, text="Ajouter un salarié", 
+                    font=("Arial", 14, "bold"), bg="#4a90e2", fg="white").pack(fill="x", pady=10)
+            
+            # Création des champs
+            form_frame = tk.Frame(add_window)
+            form_frame.pack(fill="both", expand=True, padx=10, pady=5)
+            
+            fields = [
+                ("Nom:", nom_var),
+                ("Prénom:", prenom_var),
+                ("Email:", email_var),
+                ("Poste:", poste_var),
+                ("Adresse:", adresse_var),
+                ("IBAN:", iban_var)
+            ]
+            
+            for i, (label, var) in enumerate(fields):
+                tk.Label(form_frame, text=label).grid(row=i, column=0, sticky="w", pady=5, padx=5)
+                tk.Entry(form_frame, textvariable=var, width=30).grid(row=i, column=1, sticky="w", pady=5, padx=5)
+
+            def save_new():
+                """Enregistre le nouveau salarié et met à jour Excel."""
+                # Vérification des champs obligatoires
+                if not nom_var.get().strip() or not prenom_var.get().strip():
+                    messagebox.showwarning("Attention", "Veuillez renseigner au moins le nom et le prénom.")
+                    return
+                
+                # Préparation des nouvelles données
+                new_row = {
+                    "NOM": nom_var.get(),
+                    "PRENOM": prenom_var.get(),
+                    "EMAIL": email_var.get()
+                }
+                
+                # Ajout des champs optionnels
+                for col_name, var in [
+                    ("POSTE", poste_var),
+                    ("ADRESSE", adresse_var),
+                    ("IBAN", iban_var)
+                ]:
+                    if col_name not in salaries_data.columns:
+                        salaries_data[col_name] = ""
+                    new_row[col_name] = var.get()
+                
+                try:
+                    # Ajout au DataFrame
+                    salaries_data.loc[len(salaries_data)] = new_row
+                    
+                    # Sauvegarde dans Excel
+                    save_excel_with_updated_sheet(file_paths["excel_salaries"], "Salariés", salaries_data)
+                    messagebox.showinfo("Succès", "Salarié ajouté avec succès.")
+                    
+                    # Mise à jour de l'affichage
+                    refresh_listbox()
+                    add_window.destroy()
+                except Exception as e:
+                    messagebox.showerror("Erreur", f"Erreur lors de l'ajout : {e}")
+            
+            # Boutons
+            button_frame = tk.Frame(add_window)
+            button_frame.pack(fill="x", pady=10)
+            
+            tk.Button(button_frame, text="Ajouter", command=save_new, 
+                    bg="#4caf50", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Annuler", command=add_window.destroy, 
+                    bg="#f44336", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+
+        def on_delete():
+            """Supprimer un salarié."""
+            selected_indices = listbox.curselection()
+            if not selected_indices:
+                messagebox.showwarning("Avertissement", "Veuillez sélectionner un salarié.")
+                return
+            
+            selected_index = selected_indices[0]
+            selected_row = salaries_data.iloc[selected_index]
+            
+            # Confirmation de suppression
+            nom = selected_row["NOM"] if not pd.isna(selected_row["NOM"]) else ""
+            prenom = selected_row["PRENOM"] if not pd.isna(selected_row["PRENOM"]) else ""
+            full_name = f"{nom} {prenom}".strip()
+            
+            if messagebox.askyesno("Confirmation", f"Voulez-vous vraiment supprimer {full_name} ?"):
+                try:
+                    # Suppression de la ligne
+                    salaries_data.drop(salaries_data.index[selected_index], inplace=True)
+                    salaries_data.reset_index(drop=True, inplace=True)
+                    
+                    # Sauvegarde dans Excel
+                    save_excel_with_updated_sheet(file_paths["excel_salaries"], "Salariés", salaries_data)
+                    messagebox.showinfo("Succès", f"{full_name} supprimé avec succès.")
+                    
+                    # Mise à jour de l'affichage
+                    refresh_listbox()
+                except Exception as e:
+                    messagebox.showerror("Erreur", f"Erreur lors de la suppression : {e}")
+
+        # Boutons d'action - directement sous la listbox
+        button_frame = tk.Frame(window)
+        button_frame.pack(pady=5)
+        
+        tk.Button(button_frame, text="➕ Ajouter", command=on_add, 
+                bg="#4caf50", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+        tk.Button(button_frame, text="✏️ Modifier", command=on_modify, 
+                bg="#2196f3", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+        tk.Button(button_frame, text="🗑️ Supprimer", command=on_delete, 
+             bg="#f44336", fg="black", font=("Arial", 10, "bold")).pack(side="left", padx=10)
+        
+
 def save_excel_with_updated_sheet(file_path, sheet_name, updated_data):
     """
     Sauvegarde une feuille spécifique dans un fichier Excel sans supprimer les autres feuilles.
