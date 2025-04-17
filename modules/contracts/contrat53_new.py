@@ -284,9 +284,9 @@ def show_post_contract_actions(container, pdf_path, replaced_name, replacing_nam
 
 def send_to_docusign(pdf_path, contract_type, start_date, end_date, replacing_name, replacing_email, replaced_name=None, replaced_email=None):
     """
-    Simule l'envoi du fichier PDF généré à DocuSign.
+    Envoie le fichier PDF généré à DocuSign en utilisant le script envoidocusign12.py.
     """
-    print(f"📤 Simulation d'envoi à DocuSign...")
+    print(f"📤 Envoi à DocuSign via envoidocusign12.py...")
     print(f"   📄 Fichier : {pdf_path}")
     print(f"   🏷️ Type de contrat : {contract_type}")
     print(f"   📆 Période : {start_date} - {end_date}")
@@ -294,7 +294,73 @@ def send_to_docusign(pdf_path, contract_type, start_date, end_date, replacing_na
     if replaced_name:
         print(f"   👨‍⚕️ Remplacé : {replaced_name} ({replaced_email})")
     
-    messagebox.showinfo("DocuSign", "Le contrat a été envoyé à DocuSign avec succès (simulation).")
+    try:
+        # Construire la commande avec les arguments nécessaires
+        # Sur macOS, l'exécutable Python est souvent nommé 'python3'
+        python_cmd = "python3"
+        
+        # Essayer de trouver le chemin de l'exécutable Python
+        try:
+            # Vérifier si python3 existe
+            subprocess.run([python_cmd, "--version"], capture_output=True, check=True)
+        except (subprocess.SubprocessError, FileNotFoundError):
+            # Si python3 n'existe pas, essayer python
+            python_cmd = "python"
+            try:
+                subprocess.run([python_cmd, "--version"], capture_output=True, check=True)
+            except (subprocess.SubprocessError, FileNotFoundError):
+                # Si aucun ne fonctionne, utiliser le chemin absolu vers Python
+                python_paths = [
+                    "/usr/bin/python3",
+                    "/usr/local/bin/python3",
+                    "/opt/homebrew/bin/python3",
+                    "/usr/bin/python",
+                    "/usr/local/bin/python"
+                ]
+                for path in python_paths:
+                    if os.path.exists(path):
+                        python_cmd = path
+                        break
+                else:
+                    raise FileNotFoundError("Impossible de trouver l'exécutable Python")
+        
+        # Chemin du script envoidocusign12.py
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "envoidocusign12.py")
+        
+        # Construire la commande complète
+        command = [python_cmd, script_path]
+        
+        # Ajouter les arguments obligatoires
+        command.extend([
+            pdf_path,                # Chemin du PDF
+            contract_type,           # Type de contrat (MAR ou IADE)
+            start_date,              # Date de début
+            end_date,                # Date de fin
+            replacing_name,          # Nom du remplaçant
+            replacing_email          # Email du remplaçant
+        ])
+        
+        # Ajouter les arguments optionnels pour MAR
+        if contract_type == "MAR" and replaced_name and replaced_email:
+            command.extend([
+                replaced_name,       # Nom du remplacé
+                replaced_email       # Email du remplacé
+            ])
+        
+        print(f"🔄 Exécution de la commande : {' '.join(command)}")
+        
+        # Lancer le script dans un nouveau processus
+        process = subprocess.Popen(command)
+        
+        # Informer l'utilisateur directement dans l'interface principale au lieu d'une popup
+        print("✅ Le processus d'envoi à DocuSign a été lancé.")
+        # Pas de popup, l'information sera affichée dans l'interface principale
+        
+        return True
+    except Exception as e:
+        print(f"❌ Erreur lors de l'envoi à DocuSign : {e}")
+        # Pas de popup d'erreur, l'information sera affichée dans l'interface principale
+        return False
 
 def create_contract_interface_mar(parent_frame):
     """
@@ -978,22 +1044,26 @@ def manage_mar_titulaires():
     """
     Ouvre l'interface de gestion des MAR titulaires.
     """
-    messagebox.showinfo("Fonctionnalité à venir", "La gestion des MAR titulaires sera disponible prochainement.")
+    print("ℹ️ Fonctionnalité à venir : La gestion des MAR titulaires sera disponible prochainement.")
+    # Pas de popup, l'information sera affichée dans l'interface principale
 
 def manage_mar_remplacants():
     """
     Ouvre l'interface de gestion des MAR remplaçants.
     """
-    messagebox.showinfo("Fonctionnalité à venir", "La gestion des MAR remplaçants sera disponible prochainement.")
+    print("ℹ️ Fonctionnalité à venir : La gestion des MAR remplaçants sera disponible prochainement.")
+    # Pas de popup, l'information sera affichée dans l'interface principale
 
 def manage_iade_remplacants():
     """
     Ouvre l'interface de gestion des IADE remplaçants.
     """
-    messagebox.showinfo("Fonctionnalité à venir", "La gestion des IADE remplaçants sera disponible prochainement.")
+    print("ℹ️ Fonctionnalité à venir : La gestion des IADE remplaçants sera disponible prochainement.")
+    # Pas de popup, l'information sera affichée dans l'interface principale
 
 def manage_salaries():
     """
     Ouvre l'interface de gestion des salariés.
     """
-    messagebox.showinfo("Fonctionnalité à venir", "La gestion des salariés sera disponible prochainement.")
+    print("ℹ️ Fonctionnalité à venir : La gestion des salariés sera disponible prochainement.")
+    # Pas de popup, l'information sera affichée dans l'interface principale

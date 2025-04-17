@@ -14,11 +14,26 @@ import sys
 import random
 from datetime import datetime
 
-chromedriver_path = "/opt/homebrew/bin/chromedriver"
-service = Service(chromedriver_path)
+# Définir le chemin du chromedriver en fonction de l'environnement
+chromedriver_path = "/opt/homebrew/bin/chromedriver"  # Chemin par défaut pour macOS avec Homebrew
+if not os.path.exists(chromedriver_path):
+    # Essayer d'autres chemins courants
+    alternative_paths = [
+        "/usr/local/bin/chromedriver",  # Chemin alternatif sur macOS
+        "/usr/bin/chromedriver"         # Chemin courant sur Linux
+    ]
+    
+    for path in alternative_paths:
+        if os.path.exists(path):
+            chromedriver_path = path
+            print(f"✅ Chromedriver trouvé à : {chromedriver_path}")
+            break
+    else:
+        print("⚠️ Aucun chromedriver trouvé dans les chemins standards.")
+        # On laisse le chemin par défaut, Selenium tentera de le trouver automatiquement
 
-options = webdriver.ChromeOptions()
-driver = webdriver.Chrome(service=service, options=options)
+# Ces options et ce driver ne sont pas utilisés, ils sont redéfinis plus loin
+# Suppression pour éviter la confusion
 
 def safe_click(driver, element_xpath):
     """Attend que l'élément soit cliquable et utilise JavaScript si nécessaire."""
@@ -131,13 +146,14 @@ def ajouter_destinataires_et_message():
     print("\n🛑 Script terminé. Vérifiez les informations et SIGNEZ le document.")
 
 
+# Configuration du navigateur Chrome
 options = webdriver.ChromeOptions()
 options.add_argument("--start-maximized")  # Ouvre Chrome en grand écran
 options.add_argument("--disable-infobars") # Désactive les popups gênantes
 options.add_argument("--remote-debugging-port=9222")  # Debugging
 
-CHROMEDRIVER_PATH = "/usr/local/bin/chromedriver"
-service = Service(CHROMEDRIVER_PATH)
+# Utiliser le chemin du chromedriver détecté précédemment
+service = Service(chromedriver_path)
 driver = webdriver.Chrome(service=service, options=options)
 
 
